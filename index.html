@@ -1,0 +1,862 @@
+<title>RentLedger</title>
+<style>
+  :root{
+    --ground:#f6f7f9;--surface:#ffffff;--surface-2:#eef1f4;--ink:#141a20;--muted:#5b6772;--faint:#8b97a2;
+    --border:#e2e7ec;--border-strong:#cdd5dd;--accent:#0f8a8a;
+    --accent-soft:color-mix(in srgb,var(--accent) 13%,var(--surface));
+    --income:#1f7a52;--expense:#c0473b;--warn:#b1741a;--warn-soft:#f8efe0;--info-soft:#e7eefb;--info:#2f5fb0;
+    --paid-soft:#e7f1ec;
+    --shadow:0 1px 2px rgba(20,26,32,.06),0 8px 24px rgba(20,26,32,.06);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --ground:#0d1317;--surface:#141c22;--surface-2:#1b252c;--ink:#e8edf1;--muted:#93a0ab;
+      --faint:#6c7a85;--border:#25313a;--border-strong:#34424d;--accent:#2bb3b3;
+      --accent-soft:color-mix(in srgb,var(--accent) 22%,var(--surface));
+      --income:#3cb684;--expense:#e2685b;--warn:#d69a41;--warn-soft:#33291a;--info-soft:#182740;--info:#7aa2e0;--paid-soft:#16302a;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --ground:#0d1317;--surface:#141c22;--surface-2:#1b252c;--ink:#e8edf1;--muted:#93a0ab;
+    --faint:#6c7a85;--border:#25313a;--border-strong:#34424d;--accent:#2bb3b3;
+    --accent-soft:color-mix(in srgb,var(--accent) 22%,var(--surface));
+    --income:#3cb684;--expense:#e2685b;--warn:#d69a41;--warn-soft:#33291a;--info-soft:#182740;--info:#7aa2e0;--paid-soft:#16302a;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%;overflow-x:hidden}
+  h1,h2,h3{font-family:var(--serif);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.1px}
+  button{font-family:inherit}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+
+  .topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:16px;padding:10px 16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:8px;margin-right:auto}
+  .brand .mark{font-family:var(--serif);font-size:21px;font-weight:600}
+  .brand .mark b{color:var(--accent)}
+  .brand .sub{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.14em}
+  nav.tabs{display:flex;gap:2px;flex-wrap:wrap}
+  nav.tabs button{background:transparent;border:1px solid transparent;color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13.5px;font-weight:500}
+  nav.tabs button:hover{color:var(--ink);background:var(--surface-2)}
+  nav.tabs button[aria-selected="true"]{color:var(--accent);background:var(--accent-soft)}
+  .icon-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--ink);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:15px;display:grid;place-items:center}
+  .icon-btn:hover{border-color:var(--border-strong)}
+
+  main{max-width:1080px;margin:0 auto;padding:20px 16px 64px}
+  .panel[hidden]{display:none!important}
+  .stack{display:flex;flex-direction:column;gap:20px}
+
+  .banner{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-radius:10px;padding:10px 14px;font-size:13.5px;color:var(--ink)}
+  .banner.sample{background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}
+  .banner.sample b{color:var(--warn)}
+  .banner.backup{background:var(--info-soft);border:1px solid color-mix(in srgb,var(--info) 40%,transparent)}
+  .banner.backup b{color:var(--info)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .kpis.k3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px 16px;box-shadow:var(--shadow);min-width:0}
+  .tile .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .tile .value{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:600;margin-top:8px;letter-spacing:-.5px;overflow-wrap:anywhere}
+  .tile .sub{font-size:11.5px;color:var(--faint);margin-top:3px}
+  .tile.accent{border-top:3px solid var(--accent)}
+  .tile.warn{border-top:3px solid var(--warn)}
+  .tile.good{border-top:3px solid var(--income)}
+  .pos{color:var(--income)}.neg{color:var(--expense)}
+
+  .grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px}
+  .chartcard .body{display:flex;flex-direction:column;justify-content:center;height:100%}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .card > header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .card > header h2,.card > header h3{font-size:16px}
+  .card .body{padding:16px}
+  .hint{font-size:12.5px;color:var(--muted)}
+
+  .qrow{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--border)}
+  .qrow:last-child{border-bottom:0}
+  .qtag{width:34px;height:34px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;font-family:var(--serif);font-weight:600;color:var(--muted)}
+  .qrow.due .qtag{background:var(--warn-soft);color:var(--warn)}
+  .qmeta{min-width:0}
+  .qmeta .t{font-weight:600;font-size:14px}
+  .qmeta .d{font-size:12px;color:var(--muted)}
+  .qamt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+  .chip{display:inline-block;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:99px;background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);margin-left:8px;vertical-align:middle}
+
+  canvas{display:block;width:100%;max-width:100%;min-width:0;height:auto}
+
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--surface)}
+  td.amt,th.amt{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  tr:hover td{background:var(--surface-2)}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--border-strong);color:var(--muted)}
+  .pill.income{color:var(--income);border-color:color-mix(in srgb,var(--income) 45%,transparent);background:var(--paid-soft)}
+  .pill.expense{color:var(--expense);border-color:color-mix(in srgb,var(--expense) 45%,transparent)}
+  .pill.prop{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft)}
+  .pill.paid{color:var(--income);border-color:color-mix(in srgb,var(--income) 45%,transparent);background:var(--paid-soft)}
+  .pill.due{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warn-soft)}
+  .rowbtn{background:none;border:0;color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:6px;font-size:13px}
+  .rowbtn:hover{color:var(--ink);background:var(--surface-2)}
+  .rowbtn.del:hover{color:var(--expense)}
+  .rowbtn.pay{color:var(--accent);font-weight:600}
+  .empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:14px}
+  .empty b{color:var(--ink)}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input,select{font-family:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px;width:100%}
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:600}
+  .btn{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:8px;padding:9px 15px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn:hover{filter:brightness(1.05)}
+  .btn.ghost{background:var(--surface);color:var(--ink);border-color:var(--border-strong)}
+  .btn.ghost:hover{background:var(--surface-2);filter:none}
+  .btn.danger{background:var(--expense);border-color:var(--expense)}
+  .btn.sm{padding:6px 11px;font-size:13px}
+  .grow{flex:1;min-width:120px}
+
+  .scrim{position:fixed;inset:0;background:rgba(10,14,18,.5);display:grid;place-items:center;padding:16px;z-index:50}
+  .scrim[hidden]{display:none!important}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);width:100%;max-width:460px;max-height:92%;overflow:auto}
+  .modal header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface)}
+  .modal .body{padding:16px;display:grid;gap:13px}
+  .modal .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal footer{padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surface)}
+  .seg{display:flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;background:var(--surface);border:0;padding:9px;cursor:pointer;color:var(--muted);font-weight:600;font-size:14px}
+  .seg button[aria-pressed="true"]{color:#fff}
+  .seg button.inc[aria-pressed="true"]{background:var(--income)}
+  .seg button.exp[aria-pressed="true"]{background:var(--expense)}
+
+  .settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .data-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .divider{height:1px;background:var(--border);margin:4px 0}
+  .listnote{font-size:12.5px;color:var(--muted);margin-top:10px}
+  .subtle{color:var(--muted)}
+  .breakdown{display:grid;gap:7px}
+  .brow{display:grid;grid-template-columns:1fr auto;gap:10px;font-size:13.5px;padding:5px 0;border-bottom:1px dashed var(--border)}
+  .brow.total{border-bottom:0;border-top:2px solid var(--border-strong);margin-top:4px;padding-top:9px;font-weight:700;font-size:15px}
+  .brow .n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  .swatches{display:flex;gap:10px;flex-wrap:wrap}
+  .swatch{width:34px;height:34px;border-radius:9px;border:2px solid var(--border-strong);cursor:pointer;position:relative}
+  .swatch[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
+  .catcols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .catlist{display:flex;flex-direction:column;gap:7px}
+  .catrow{display:flex;gap:6px;align-items:center}
+  .catrow input{padding:6px 9px}
+  .catrow .x{flex:0 0 auto;width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);cursor:pointer}
+  .catrow .x:hover{color:var(--expense);border-color:var(--expense)}
+  .catadd{display:flex;gap:6px;margin-top:4px}
+  @media (max-width:820px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:600px){
+    nav.tabs{order:3;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:3px}
+    nav.tabs button{white-space:nowrap}
+    .topbar{gap:10px 12px}
+    .kpis.k3{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:560px){.catcols{grid-template-columns:1fr}}
+  @media (max-width:480px){.settings-grid{grid-template-columns:1fr}.modal .row{grid-template-columns:1fr}.brand .sub{display:none}.tile .value{font-size:22px}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="topbar">
+  <div class="brand"><span class="mark">Rent<b>Ledger</b></span><span class="sub">Landlord Bookkeeping</span></div>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
+    <button role="tab" data-tab="properties" aria-selected="false">Properties</button>
+    <button role="tab" data-tab="transactions" aria-selected="false">Income &amp; Expenses</button>
+    <button role="tab" data-tab="reports" aria-selected="false">Reports</button>
+    <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+  </nav>
+  <button class="icon-btn" id="themeBtn" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+</header>
+
+<main>
+  <section class="panel stack" id="panel-dashboard">
+    <div class="banner sample" id="sampleBanner" hidden>
+      <span>👋 You're viewing <b>example data</b> so you can see how it works. Clear it under <b>Settings → Load / reset data</b> when you're ready to track your own properties.</span>
+      <button class="btn ghost sm" id="clearSampleBtn">Clear &amp; start fresh</button>
+    </div>
+    <div class="banner backup" id="backupBanner" hidden>
+      <span>💾 You've made changes since your last backup. Your data lives only in this browser — <b>save a backup</b> so you never lose it.</span>
+      <button class="btn sm" id="backupNowBtn">Back up now</button>
+    </div>
+
+    <div class="kpis">
+      <div class="tile"><div class="label">Income · <span id="kYear">2026</span></div><div class="value pos num" id="kIncome">$0</div></div>
+      <div class="tile"><div class="label">Expenses</div><div class="value neg num" id="kExpense">$0</div></div>
+      <div class="tile accent"><div class="label">Net profit</div><div class="value num" id="kNet">$0</div></div>
+      <div class="tile warn"><div class="label">Tax to set aside</div><div class="value num" id="kTax">$0</div></div>
+    </div>
+
+    <div class="kpis k3">
+      <div class="tile good"><div class="label">Rent collected</div><div class="value num" id="kRentGot">$0</div><div class="sub" id="kRentMonth">this month</div></div>
+      <div class="tile warn"><div class="label">Rent outstanding</div><div class="value num" id="kRentDue">$0</div><div class="sub" id="kRentDueCount">0 unpaid</div></div>
+      <div class="tile"><div class="label">Properties</div><div class="value num" id="kProps">0</div><div class="sub" id="kRentRoll">$0 / mo rent roll</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card chartcard">
+        <header><h2>Net profit by month</h2><span class="hint" id="chartYear">2026</span></header>
+        <div class="body"><canvas id="chart" width="640" height="240" aria-label="Monthly net profit chart"></canvas></div>
+      </div>
+      <div class="card">
+        <header><h3>Estimated quarterly tax</h3><span class="hint">IRS due dates</span></header>
+        <div class="body">
+          <div id="quarters"></div>
+          <p class="listnote">Rough set-aside = profit in each IRS period × your tax rate (<span id="qRate">25</span>%). Rental income generally isn't subject to self-employment tax, but you may still owe quarterly estimates. Not tax advice — confirm with a preparer.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h3>Recent activity</h3><button class="btn sm" id="addFromDash">+ Add income / expense</button></header>
+      <div class="tablewrap"><table id="recentTable"><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="panel stack" id="panel-properties" hidden>
+    <div class="card">
+      <header style="flex-wrap:wrap">
+        <h2>Rent roll</h2>
+        <div class="toolbar">
+          <select id="rrPeriod" style="width:auto"></select>
+          <button class="btn sm" id="addPropBtn2">+ Add property</button>
+        </div>
+      </header>
+      <div class="tablewrap">
+        <table id="rentRollTable">
+          <thead><tr><th>Property</th><th>Tenant</th><th class="amt">Rent due</th><th class="amt">Received</th><th class="amt">Balance</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="body" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border)">
+        <span class="hint" id="rrSummary">—</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h3>Your properties</h3><button class="btn sm" id="addPropBtn">+ Add property</button></header>
+      <div class="tablewrap">
+        <table id="propTable">
+          <thead><tr><th>Property</th><th>Tenant</th><th class="amt">Monthly rent</th><th class="amt">Net this year</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel stack" id="panel-transactions" hidden>
+    <div class="card">
+      <header style="flex-wrap:wrap">
+        <h2>Income &amp; Expenses</h2>
+        <div class="toolbar">
+          <input class="grow" id="txSearch" placeholder="Search description…" style="min-width:150px">
+          <select id="txProp" style="width:auto"><option value="">All properties</option></select>
+          <select id="txType" style="width:auto"><option value="">All types</option><option value="income">Income</option><option value="expense">Expense</option></select>
+          <select id="txPeriod" style="width:auto"></select>
+          <button class="btn sm" id="addTxBtn">+ Add</button>
+        </div>
+      </header>
+      <div class="tablewrap">
+        <table id="txTable">
+          <thead><tr><th>Date</th><th>Type</th><th>Property</th><th>Category</th><th>Description</th><th class="amt">Amount</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="body" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border)">
+        <span class="hint" id="txCount">0 items</span>
+        <span class="hint num" id="txSum"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel stack" id="panel-reports" hidden>
+    <div class="card">
+      <header style="flex-wrap:wrap">
+        <h2>Profit &amp; Loss</h2>
+        <div class="toolbar">
+          <select id="rProp" style="width:auto"><option value="">All properties</option></select>
+          <select id="rPeriod" style="width:auto"></select>
+          <button class="btn ghost sm" id="csvBtn">⤓ Export CSV</button>
+        </div>
+      </header>
+      <div class="body">
+        <div class="grid2">
+          <div>
+            <h3 style="font-size:14px;color:var(--muted);margin-bottom:8px">Income</h3>
+            <div class="breakdown" id="incBreak"></div>
+            <h3 style="font-size:14px;color:var(--muted);margin:18px 0 8px">Expenses</h3>
+            <div class="breakdown" id="expBreak"></div>
+          </div>
+          <div>
+            <div class="card" style="box-shadow:none">
+              <div class="body">
+                <div class="breakdown">
+                  <div class="brow"><span>Total income</span><span class="n pos" id="rInc">$0</span></div>
+                  <div class="brow"><span>Total expenses</span><span class="n neg" id="rExp">$0</span></div>
+                  <div class="brow total"><span>Net profit</span><span class="n" id="rNet">$0</span></div>
+                </div>
+                <div class="divider" style="margin:14px 0"></div>
+                <div class="breakdown">
+                  <div class="brow"><span>Set aside for tax at <span id="rRate">25</span>%</span><span class="n" id="rSet">$0</span></div>
+                </div>
+                <h3 style="font-size:14px;color:var(--muted);margin:18px 0 8px">Net by property</h3>
+                <div class="breakdown" id="propBreak"></div>
+                <p class="listnote">Export the CSV and hand it to your tax preparer — it maps to Schedule E. Everything stays on your device.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel stack" id="panel-settings" hidden>
+    <div class="card">
+      <header><h2>You &amp; tax</h2></header>
+      <div class="body">
+        <div class="settings-grid">
+          <label class="field">Your name<input id="sName" placeholder="Your name"></label>
+          <label class="field">Tax year<input id="sYear" type="number" min="2000" max="2100" step="1"></label>
+          <label class="field">Tax set-aside rate (%)<input id="sRate" type="number" min="0" max="60" step="1"></label>
+          <label class="field">Currency symbol<input id="sCur" maxlength="3"></label>
+        </div>
+        <p class="listnote">The set-aside rate is a rough guide for income tax on your rental profit. Confirm your actual rate with a tax professional.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h3>Properties</h3><button class="btn ghost sm" id="addPropBtn3">+ Add property</button></header>
+      <div class="body">
+        <p class="hint" style="margin-bottom:12px">Add each rental you own. The monthly rent drives your rent roll; every income &amp; expense is tagged to a property.</p>
+        <div class="tablewrap">
+          <table id="propEditTable">
+            <thead><tr><th>Name / address</th><th style="width:34%">Tenant</th><th class="amt" style="width:22%">Monthly rent</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h3>Appearance</h3><span class="hint">Make it yours</span></header>
+      <div class="body">
+        <label class="field" style="margin-bottom:10px">Accent colour</label>
+        <div class="swatches" id="swatches"></div>
+        <p class="listnote">Pick the accent that suits you. Use the ◐ button (top right) to switch light / dark at any time.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h3>Categories</h3><button class="btn ghost sm" id="catReset">Reset to defaults</button></header>
+      <div class="body">
+        <p class="hint" style="margin-bottom:14px">Rental income &amp; Schedule E expense categories. Rename, delete or add your own.</p>
+        <div class="catcols">
+          <div>
+            <label class="field" style="margin-bottom:8px">Income categories</label>
+            <div class="catlist" id="incomeCats"></div>
+            <div class="catadd"><input id="incomeAdd" placeholder="Add income category…"><button class="btn ghost sm" data-addcat="income">Add</button></div>
+          </div>
+          <div>
+            <label class="field" style="margin-bottom:8px">Expense categories</label>
+            <div class="catlist" id="expenseCats"></div>
+            <div class="catadd"><input id="expenseAdd" placeholder="Add expense category…"><button class="btn ghost sm" data-addcat="expense">Add</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <header><h3>Load / reset data</h3></header>
+      <div class="body">
+        <div class="data-actions">
+          <button class="btn ghost" id="backupBtn">⤓ Back up (save file)</button>
+          <button class="btn ghost" id="restoreBtn">⤒ Restore from file</button>
+          <button class="btn ghost" id="sampleBtn">Load example data</button>
+          <button class="btn danger" id="clearBtn">Clear all data</button>
+        </div>
+        <input type="file" id="fileInput" accept="application/json" hidden>
+        <p class="listnote">Last backup: <b id="lastBackup">never</b>. RentLedger keeps everything in this browser only — nothing is uploaded, no account, no subscription. Always back up before clearing your browser data or switching devices.</p>
+      </div>
+    </div>
+    <p class="hint" style="text-align:center">RentLedger · works offline · your data never leaves this device</p>
+  </section>
+</main>
+
+<div class="scrim" id="txScrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="txTitle">
+    <header><h3 id="txTitle">Add income / expense</h3><button class="icon-btn" data-close>✕</button></header>
+    <div class="body">
+      <div class="seg" id="txTypeSeg">
+        <button type="button" class="inc" data-type="income" aria-pressed="true">Income</button>
+        <button type="button" class="exp" data-type="expense" aria-pressed="false">Expense</button>
+      </div>
+      <label class="field">Property<select id="fProperty"></select></label>
+      <div class="row">
+        <label class="field">Date<input type="date" id="fDate"></label>
+        <label class="field">Amount<input type="number" id="fAmount" min="0" step="0.01" placeholder="0.00" inputmode="decimal"></label>
+      </div>
+      <label class="field">Category<select id="fCategory"></select></label>
+      <label class="field">Description <span class="subtle">(optional)</span><input id="fDesc" placeholder="e.g. Plumbing repair"></label>
+    </div>
+    <footer><button class="btn ghost" data-close>Cancel</button><button class="btn" id="txSave">Save</button></footer>
+  </div>
+</div>
+
+<div class="scrim" id="propScrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="propTitle">
+    <header><h3 id="propTitle">Add property</h3><button class="icon-btn" data-close>✕</button></header>
+    <div class="body">
+      <label class="field">Name / address<input id="pName" placeholder="e.g. 12 Oak Street"></label>
+      <div class="row">
+        <label class="field">Monthly rent<input type="number" id="pRent" min="0" step="1" placeholder="0" inputmode="decimal"></label>
+        <label class="field">Tenant <span class="subtle">(optional)</span><input id="pTenant" placeholder="Tenant name"></label>
+      </div>
+    </div>
+    <footer><button class="btn ghost" data-close>Cancel</button><button class="btn" id="propSave">Save</button></footer>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var LS="rentledger_v1", THEME="rentledger_theme";
+  var DEF_INCOME=["Rent income","Late fee income","Other income"];
+  var DEF_EXPENSE=["Advertising","Auto & travel","Cleaning & maintenance","Commissions & fees","Insurance","Legal & professional","Management fees","Mortgage interest","Repairs & maintenance","Supplies","Property taxes","Utilities","HOA fees","Depreciation","Other expense"];
+  var MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var QUARTERS=[{m0:0,m1:2,label:"Q1 · Jan–Mar",due:"Apr 15"},{m0:3,m1:4,label:"Q2 · Apr–May",due:"Jun 15"},{m0:5,m1:7,label:"Q3 · Jun–Aug",due:"Sep 15"},{m0:8,m1:11,label:"Q4 · Sep–Dec",due:"Jan 15"}];
+  var ACCENTS=[["Teal","#0f8a8a"],["Ledger green","#1f7a52"],["Ocean blue","#2563a8"],["Indigo","#4f56c4"],["Plum","#8a3f77"],["Slate","#47566a"],["Rust","#b0552d"]];
+
+  var state=null, editTxId=null, editPropId=null, pendingType="income";
+
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+  function todayISO(){return new Date().toISOString().slice(0,10);}
+  function load(){try{var r=localStorage.getItem(LS);return r?JSON.parse(r):null;}catch(e){return null;}}
+  function save(){try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){}}
+
+  function migrate(s){
+    if(!s.settings) s.settings={};
+    if(!s.properties) s.properties=[];
+    if(!s.tx) s.tx=[];
+    if(!s.cats) s.cats={income:DEF_INCOME.slice(),expense:DEF_EXPENSE.slice()};
+    if(!s.cats.income||!s.cats.income.length) s.cats.income=DEF_INCOME.slice();
+    if(!s.cats.expense||!s.cats.expense.length) s.cats.expense=DEF_EXPENSE.slice();
+    if(!s.settings.accent) s.settings.accent="#0f8a8a";
+    if(typeof s.settings.year!=="number") s.settings.year=new Date().getFullYear();
+    if(typeof s.settings.rate!=="number") s.settings.rate=25;
+    if(!s.settings.currency) s.settings.currency="$";
+    if(typeof s.dirty!=="number") s.dirty=0;
+    if(!("lastBackup" in s)) s.lastBackup=null;
+    return s;
+  }
+  function sampleData(){
+    var y=new Date().getFullYear();
+    function d(m,day){return y+"-"+String(m+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");}
+    var p1=uid(),p2=uid(),p3=uid();
+    return migrate({
+      sample:true, dirty:0, lastBackup:null,
+      settings:{name:"Sam Carter",year:y,rate:25,currency:"$",accent:"#0f8a8a"},
+      properties:[
+        {id:p1,name:"12 Oak Street",rent:1650,tenant:"The Reyes family"},
+        {id:p2,name:"Apt 4B · 210 Elm Ave",rent:1200,tenant:"Jamie Kim"},
+        {id:p3,name:"88 Birch Road",rent:1950,tenant:"Chris & Dana Lopez"}
+      ],
+      tx:[
+        {id:uid(),date:d(0,3),type:"income",amount:1650,category:"Rent income",desc:"January rent",propertyId:p1},
+        {id:uid(),date:d(3,3),type:"income",amount:1650,category:"Rent income",desc:"April rent",propertyId:p1},
+        {id:uid(),date:d(6,3),type:"income",amount:1650,category:"Rent income",desc:"July rent",propertyId:p1},
+        {id:uid(),date:d(1,2),type:"income",amount:1200,category:"Rent income",desc:"February rent",propertyId:p2},
+        {id:uid(),date:d(4,2),type:"income",amount:1200,category:"Rent income",desc:"May rent",propertyId:p2},
+        {id:uid(),date:d(7,2),type:"income",amount:1200,category:"Rent income",desc:"August rent",propertyId:p2},
+        {id:uid(),date:d(2,1),type:"income",amount:1950,category:"Rent income",desc:"March rent",propertyId:p3},
+        {id:uid(),date:d(5,1),type:"income",amount:1950,category:"Rent income",desc:"June rent",propertyId:p3},
+        {id:uid(),date:d(8,1),type:"income",amount:1950,category:"Rent income",desc:"September rent",propertyId:p3},
+        {id:uid(),date:d(1,14),type:"expense",amount:320,category:"Repairs & maintenance",desc:"Plumbing repair",propertyId:p1},
+        {id:uid(),date:d(2,9),type:"expense",amount:140,category:"Insurance",desc:"Landlord insurance",propertyId:p2},
+        {id:uid(),date:d(3,20),type:"expense",amount:890,category:"Property taxes",desc:"Property tax instalment",propertyId:p3},
+        {id:uid(),date:d(4,5),type:"expense",amount:165,category:"Management fees",desc:"Property manager fee",propertyId:p1},
+        {id:uid(),date:d(5,18),type:"expense",amount:210,category:"Cleaning & maintenance",desc:"Turnover clean",propertyId:p3},
+        {id:uid(),date:d(6,22),type:"expense",amount:95,category:"Repairs & maintenance",desc:"Dishwasher fix",propertyId:p2}
+      ]
+    });
+  }
+  function blankData(){
+    var y=new Date().getFullYear();
+    return migrate({sample:false,dirty:0,lastBackup:null,settings:{name:"",year:y,rate:25,currency:"$",accent:"#0f8a8a"},properties:[],tx:[]});
+  }
+
+  function fmt(n){var c=(state&&state.settings.currency)||"$";var neg=n<0;n=Math.abs(Math.round(n*100)/100);return (neg?"-":"")+c+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function fmt0(n){var c=(state&&state.settings.currency)||"$";return c+Math.round(n).toLocaleString();}
+  function yearOf(iso){return parseInt(iso.slice(0,4),10);}
+  function monthOf(iso){return parseInt(iso.slice(5,7),10)-1;}
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function propName(id){var p=state.properties.find(function(x){return x.id===id;});return p?p.name:"— (unassigned)";}
+
+  function totalsForYear(){var y=state.settings.year,inc=0,exp=0;state.tx.forEach(function(t){if(yearOf(t.date)!==y)return;if(t.type==="income")inc+=+t.amount;else exp+=+t.amount;});return {inc:inc,exp:exp,net:inc-exp};}
+  function rentRollFor(m){
+    var y=state.settings.year;
+    return state.properties.map(function(p){
+      var got=0;
+      state.tx.forEach(function(t){if(t.type==="income"&&t.category==="Rent income"&&t.propertyId===p.id&&yearOf(t.date)===y&&monthOf(t.date)===m)got+=+t.amount;});
+      return {prop:p,due:+p.rent||0,got:got,bal:(+p.rent||0)-got};
+    });
+  }
+  function netForProperty(id){var y=state.settings.year,n=0;state.tx.forEach(function(t){if(t.propertyId!==id||yearOf(t.date)!==y)return;n+=t.type==="income"?+t.amount:-t.amount;});return n;}
+
+  /* ---------- appearance ---------- */
+  function applyAccent(){try{document.documentElement.style.setProperty("--accent",state.settings.accent||"#0f8a8a");}catch(e){}}
+  function renderSwatches(){
+    var wrap=document.getElementById("swatches");wrap.innerHTML="";
+    ACCENTS.forEach(function(a){
+      var b=document.createElement("button");b.className="swatch";b.style.background=a[1];b.title=a[0];
+      b.setAttribute("aria-label",a[0]);b.setAttribute("aria-pressed",(state.settings.accent===a[1]));
+      b.addEventListener("click",function(){state.settings.accent=a[1];applyAccent();commit();});
+      wrap.appendChild(b);
+    });
+  }
+
+  /* ---------- categories editor ---------- */
+  function renderCatEditor(){
+    ["income","expense"].forEach(function(kind){
+      var host=document.getElementById(kind+"Cats");host.innerHTML="";
+      state.cats[kind].forEach(function(name,idx){
+        var row=document.createElement("div");row.className="catrow";
+        var inp=document.createElement("input");inp.value=name;inp.setAttribute("aria-label",kind+" category");
+        inp.addEventListener("change",function(){var v=inp.value.trim();if(v){state.cats[kind][idx]=v;}save();refreshCatSelectsOnly();});
+        var x=document.createElement("button");x.className="x";x.textContent="✕";x.title="Remove";
+        x.addEventListener("click",function(){if(state.cats[kind].length<=1)return;state.cats[kind].splice(idx,1);save();renderCatEditor();refreshCatSelectsOnly();});
+        row.appendChild(inp);row.appendChild(x);host.appendChild(row);
+      });
+    });
+  }
+  function addCat(kind){
+    var inp=document.getElementById(kind+"Add");var v=(inp.value||"").trim();if(!v)return;
+    if(state.cats[kind].indexOf(v)<0)state.cats[kind].push(v);
+    inp.value="";save();renderCatEditor();refreshCatSelectsOnly();
+  }
+  document.querySelectorAll("[data-addcat]").forEach(function(b){b.addEventListener("click",function(){addCat(b.dataset.addcat);});});
+  ["income","expense"].forEach(function(k){document.getElementById(k+"Add").addEventListener("keydown",function(e){if(e.key==="Enter")addCat(k);});});
+  document.getElementById("catReset").addEventListener("click",function(){state.cats={income:DEF_INCOME.slice(),expense:DEF_EXPENSE.slice()};save();renderCatEditor();refreshCatSelectsOnly();});
+  function refreshCatSelectsOnly(){if(!document.getElementById("txScrim").hidden) fillCats();}
+
+  /* ---------- property selects / editor ---------- */
+  function fillPropertySelects(){
+    var f=document.getElementById("fProperty");var cur=f.value;f.innerHTML="";
+    if(!state.properties.length){var o=document.createElement("option");o.value="";o.textContent="— add a property first —";f.appendChild(o);}
+    state.properties.forEach(function(p){var o=document.createElement("option");o.value=p.id;o.textContent=p.name;f.appendChild(o);});
+    if(cur)f.value=cur;
+    [["txProp","All properties"],["rProp","All properties"]].forEach(function(pair){
+      var s=document.getElementById(pair[0]);var c=s.value;s.innerHTML='<option value="">'+pair[1]+'</option>';
+      state.properties.forEach(function(p){var o=document.createElement("option");o.value=p.id;o.textContent=p.name;s.appendChild(o);});
+      if(c)s.value=c;
+    });
+  }
+  function renderPropEditor(){
+    var tbody=document.querySelector("#propEditTable tbody");tbody.innerHTML="";
+    if(!state.properties.length){tbody.innerHTML='<tr><td class="empty" colspan="4">No properties yet — add your first rental.</td></tr>';return;}
+    state.properties.forEach(function(p){
+      var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+esc(p.name)+'</td><td class="subtle">'+esc(p.tenant||"")+'</td><td class="amt">'+fmt0(+p.rent||0)+'</td><td style="text-align:right;white-space:nowrap"><button class="rowbtn" data-editprop="'+p.id+'">Edit</button><button class="rowbtn del" data-delprop="'+p.id+'">Delete</button></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ---------- dashboard ---------- */
+  function renderAll(){
+    document.getElementById("sampleBanner").hidden=!state.sample;
+    var changed=state.tx.length+state.properties.length;
+    var needBackup=!state.sample && changed>0 && (state.dirty>=6 || (!state.lastBackup && state.dirty>0));
+    document.getElementById("backupBanner").hidden=!needBackup;
+    renderDashboard();renderProperties();renderTransactions();renderReports();renderSettingsInputs();
+  }
+  function renderDashboard(){
+    var y=state.settings.year,t=totalsForYear();
+    document.getElementById("kYear").textContent=y;document.getElementById("chartYear").textContent=y;
+    document.getElementById("qRate").textContent=state.settings.rate;
+    document.getElementById("kIncome").textContent=fmt(t.inc);document.getElementById("kExpense").textContent=fmt(t.exp);
+    var net=document.getElementById("kNet");net.textContent=fmt(t.net);net.className="value num "+(t.net<0?"neg":"pos");
+    document.getElementById("kTax").textContent=fmt(Math.max(0,t.net)*state.settings.rate/100);
+
+    var now=new Date(),curM=(now.getFullYear()===y)?now.getMonth():0;
+    var roll=rentRollFor(curM),got=0,due=0,unpaid=0,roll0=0;
+    roll.forEach(function(r){got+=r.got;if(r.bal>0){due+=r.bal;unpaid++;}roll0+=r.due;});
+    document.getElementById("kRentGot").textContent=fmt(got);
+    document.getElementById("kRentMonth").textContent=MONTHS[curM]+" "+y;
+    document.getElementById("kRentDue").textContent=fmt(due);
+    document.getElementById("kRentDueCount").textContent=unpaid+" propert"+(unpaid===1?"y":"ies")+" unpaid";
+    document.getElementById("kProps").textContent=state.properties.length;
+    document.getElementById("kRentRoll").textContent=fmt0(roll0)+" / mo rent roll";
+
+    var qEl=document.getElementById("quarters");qEl.innerHTML="";
+    var marked=false,curMonthForDue=(now.getFullYear()===y)?now.getMonth():-1;
+    QUARTERS.forEach(function(q,i){
+      var profit=0;
+      state.tx.forEach(function(x){if(yearOf(x.date)!==y)return;var m=monthOf(x.date);if(m>=q.m0&&m<=q.m1){profit+=x.type==="income"?+x.amount:-x.amount;}});
+      var setAside=Math.max(0,profit)*state.settings.rate/100;
+      var isDue=!marked&&curMonthForDue>=0&&curMonthForDue<=q.m1;if(isDue)marked=true;
+      var div=document.createElement("div");div.className="qrow"+(isDue?" due":"");
+      div.innerHTML='<div class="qtag">Q'+(i+1)+'</div><div class="qmeta"><div class="t">'+q.label+(isDue?'<span class="chip">next due</span>':'')+'</div><div class="d">Pay by '+q.due+(i===3?' '+(y+1):' '+y)+' · profit '+fmt(profit)+'</div></div><div class="qamt">'+fmt(setAside)+'</div>';
+      qEl.appendChild(div);
+    });
+    drawChart();
+
+    var body=document.querySelector("#recentTable tbody");body.innerHTML="";
+    var recent=state.tx.slice().sort(function(a,b){return b.date<a.date?-1:1;}).slice(0,6);
+    if(!recent.length){body.innerHTML='<tr><td class="empty" colspan="4"><b>Nothing logged yet.</b><br>Add a property, then record rent and expenses.</td></tr>';return;}
+    recent.forEach(function(x){
+      var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+x.date+'</td><td><span class="pill '+x.type+'">'+x.type+'</span></td><td>'+esc(x.desc||x.category)+'<div class="hint">'+esc(propName(x.propertyId))+' · '+esc(x.category)+'</div></td><td class="amt '+(x.type==="income"?"pos":"neg")+'">'+(x.type==="income"?"+":"−")+fmt(x.amount).replace("-","")+'</td>';
+      body.appendChild(tr);
+    });
+  }
+  function drawChart(){
+    var c=document.getElementById("chart");if(!c)return;var ctx=c.getContext("2d");
+    var dpr=window.devicePixelRatio||1,cssW=c.clientWidth||640,cssH=240;
+    c.width=cssW*dpr;c.height=cssH*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cssW,cssH);
+    var y=state.settings.year,nets=new Array(12).fill(0);
+    state.tx.forEach(function(x){if(yearOf(x.date)!==y)return;nets[monthOf(x.date)]+=x.type==="income"?+x.amount:-x.amount;});
+    var css=getComputedStyle(document.documentElement);
+    var cInc=css.getPropertyValue("--income").trim(),cExp=css.getPropertyValue("--expense").trim(),cMut=css.getPropertyValue("--muted").trim(),cBor=css.getPropertyValue("--border").trim();
+    var padL=44,padR=8,padT=12,padB=22,W=cssW-padL-padR,H=cssH-padT-padB;
+    var max=Math.max(100,Math.max.apply(null,nets.map(Math.abs)));
+    var zeroY=padT+H*0.5;
+    ctx.font="10px "+css.getPropertyValue("--mono");ctx.fillStyle=cMut;ctx.textAlign="right";ctx.textBaseline="middle";
+    [max,0,-max].forEach(function(v){var yy=padT+H*((max-v)/(max*2));if(v===0){ctx.strokeStyle=cBor;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(padL+W,yy);ctx.stroke();}ctx.fillText((v<0?"-":"")+"$"+Math.abs(Math.round(v/1000*10)/10)+"k",padL-6,yy);});
+    var bw=W/12,bar=bw*0.56;ctx.textAlign="center";ctx.textBaseline="top";
+    nets.forEach(function(v,m){var x=padL+bw*m+(bw-bar)/2,h=H/2*(Math.abs(v)/max);ctx.fillStyle=v>=0?cInc:cExp;if(v>=0)ctx.fillRect(x,zeroY-h,bar,h);else ctx.fillRect(x,zeroY,bar,h);ctx.fillStyle=cMut;ctx.fillText(MONTHS[m],x+bar/2,padT+H+6);});
+  }
+
+  function periodOptions(sel){var y=state.settings.year;sel.innerHTML="";var opts=[["all","Full year "+y]];QUARTERS.forEach(function(q,i){opts.push(["q"+i,"Q"+(i+1)+" "+y]);});MONTHS.forEach(function(m,i){opts.push(["m"+i,m+" "+y]);});opts.forEach(function(o){var e=document.createElement("option");e.value=o[0];e.textContent=o[1];sel.appendChild(e);});}
+  function monthOptions(sel){var y=state.settings.year;sel.innerHTML="";MONTHS.forEach(function(m,i){var e=document.createElement("option");e.value=i;e.textContent=m+" "+y;sel.appendChild(e);});var now=new Date();sel.value=(now.getFullYear()===y)?now.getMonth():0;}
+  function inPeriod(iso,p){if(yearOf(iso)!==state.settings.year)return false;if(p==="all")return true;var m=monthOf(iso);if(p[0]==="q"){var q=QUARTERS[+p.slice(1)];return m>=q.m0&&m<=q.m1;}if(p[0]==="m")return m===+p.slice(1);return true;}
+
+  /* ---------- properties tab (rent roll) ---------- */
+  function renderProperties(){
+    var m=parseInt(document.getElementById("rrPeriod").value,10);if(isNaN(m))m=0;
+    var roll=rentRollFor(m),tbody=document.querySelector("#rentRollTable tbody");tbody.innerHTML="";
+    if(!state.properties.length){tbody.innerHTML='<tr><td class="empty" colspan="7"><b>No properties yet.</b><br>Tap “+ Add property” to start your rent roll.</td></tr>';}
+    var tGot=0,tDue=0;
+    roll.forEach(function(r){
+      tGot+=r.got;if(r.bal>0)tDue+=r.bal;
+      var paid=r.bal<=0.001;
+      var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+esc(r.prop.name)+'</td><td class="subtle">'+esc(r.prop.tenant||"")+'</td><td class="amt">'+fmt(r.due)+'</td><td class="amt pos">'+fmt(r.got)+'</td><td class="amt '+(r.bal>0?"neg":"")+'">'+fmt(r.bal)+'</td><td><span class="pill '+(paid?"paid":"due")+'">'+(paid?"Paid":"Due")+'</span></td><td style="text-align:right;white-space:nowrap">'+(paid?'':'<button class="rowbtn pay" data-pay="'+r.prop.id+'" data-month="'+m+'">Record payment</button>')+'</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById("rrSummary").textContent=state.properties.length?("Collected "+fmt(tGot)+" · outstanding "+fmt(tDue)+" for "+MONTHS[m]+" "+state.settings.year):"";
+
+    var pt=document.querySelector("#propTable tbody");pt.innerHTML="";
+    if(!state.properties.length){pt.innerHTML='<tr><td class="empty" colspan="5">No properties yet.</td></tr>';}
+    state.properties.forEach(function(p){
+      var n=netForProperty(p.id);
+      var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+esc(p.name)+'</td><td class="subtle">'+esc(p.tenant||"")+'</td><td class="amt">'+fmt0(+p.rent||0)+'</td><td class="amt '+(n<0?"neg":"pos")+'">'+fmt(n)+'</td><td style="text-align:right;white-space:nowrap"><button class="rowbtn" data-editprop="'+p.id+'">Edit</button><button class="rowbtn del" data-delprop="'+p.id+'">Delete</button></td>';
+      pt.appendChild(tr);
+    });
+  }
+
+  /* ---------- transactions ---------- */
+  function renderTransactions(){
+    var tbody=document.querySelector("#txTable tbody");tbody.innerHTML="";
+    var q=(document.getElementById("txSearch").value||"").toLowerCase();
+    var ft=document.getElementById("txType").value,fp=document.getElementById("txPeriod").value||"all",fpr=document.getElementById("txProp").value;
+    var rows=state.tx.filter(function(x){if(ft&&x.type!==ft)return false;if(fpr&&x.propertyId!==fpr)return false;if(!inPeriod(x.date,fp))return false;if(q&&(x.desc||"").toLowerCase().indexOf(q)<0&&(x.category||"").toLowerCase().indexOf(q)<0)return false;return true;}).sort(function(a,b){return b.date<a.date?-1:1;});
+    var sum=0;
+    if(!rows.length)tbody.innerHTML='<tr><td class="empty" colspan="7"><b>Nothing here yet.</b><br>Record rent, repairs, insurance, taxes and more — tagged to each property.</td></tr>';
+    rows.forEach(function(x){
+      sum+=x.type==="income"?+x.amount:-x.amount;
+      var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+x.date+'</td><td><span class="pill '+x.type+'">'+x.type+'</span></td><td><span class="pill prop">'+esc(propName(x.propertyId))+'</span></td><td>'+esc(x.category)+'</td><td>'+esc(x.desc||"")+'</td><td class="amt '+(x.type==="income"?"pos":"neg")+'">'+(x.type==="income"?"+":"−")+fmt(x.amount).replace("-","")+'</td><td style="text-align:right;white-space:nowrap"><button class="rowbtn" data-edit="'+x.id+'">Edit</button><button class="rowbtn" data-dup="'+x.id+'" title="Duplicate">Copy</button><button class="rowbtn del" data-del="'+x.id+'">Delete</button></td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById("txCount").textContent=rows.length+" item"+(rows.length===1?"":"s");
+    document.getElementById("txSum").textContent=rows.length?"Net in view: "+fmt(sum):"";
+  }
+
+  function renderReports(){
+    var p=document.getElementById("rPeriod").value||"all",fpr=document.getElementById("rProp").value;
+    var inc={},exp={},incT=0,expT=0,byProp={};
+    state.tx.forEach(function(x){
+      if(!inPeriod(x.date,p))return;if(fpr&&x.propertyId!==fpr)return;
+      if(x.type==="income"){inc[x.category]=(inc[x.category]||0)+ +x.amount;incT+=+x.amount;}
+      else{exp[x.category]=(exp[x.category]||0)+ +x.amount;expT+=+x.amount;}
+      byProp[x.propertyId]=(byProp[x.propertyId]||0)+(x.type==="income"?+x.amount:-x.amount);
+    });
+    function fill(el,obj){el.innerHTML="";var keys=Object.keys(obj).sort(function(a,b){return obj[b]-obj[a];});if(!keys.length){el.innerHTML='<div class="hint">None in this period.</div>';return;}keys.forEach(function(k){var r=document.createElement("div");r.className="brow";r.innerHTML='<span>'+esc(k)+'</span><span class="n">'+fmt(obj[k])+'</span>';el.appendChild(r);});}
+    fill(document.getElementById("incBreak"),inc);fill(document.getElementById("expBreak"),exp);
+    var pb=document.getElementById("propBreak");pb.innerHTML="";
+    var pkeys=Object.keys(byProp);
+    if(!pkeys.length){pb.innerHTML='<div class="hint">None in this period.</div>';}
+    pkeys.sort(function(a,b){return byProp[b]-byProp[a];}).forEach(function(id){var r=document.createElement("div");r.className="brow";r.innerHTML='<span>'+esc(propName(id))+'</span><span class="n '+(byProp[id]<0?"neg":"pos")+'">'+fmt(byProp[id])+'</span>';pb.appendChild(r);});
+    var net=incT-expT;
+    document.getElementById("rInc").textContent=fmt(incT);document.getElementById("rExp").textContent=fmt(expT);
+    var rn=document.getElementById("rNet");rn.textContent=fmt(net);rn.className="n "+(net<0?"neg":"pos");
+    document.getElementById("rRate").textContent=state.settings.rate;
+    document.getElementById("rSet").textContent=fmt(Math.max(0,net)*state.settings.rate/100);
+  }
+  function renderSettingsInputs(){
+    var s=state.settings;
+    document.getElementById("sName").value=s.name||"";document.getElementById("sYear").value=s.year;
+    document.getElementById("sRate").value=s.rate;document.getElementById("sCur").value=s.currency;
+    document.getElementById("lastBackup").textContent=state.lastBackup?new Date(state.lastBackup).toLocaleString():"never";
+    renderSwatches();renderPropEditor();renderCatEditor();
+  }
+
+  /* ---------- tabs / theme ---------- */
+  var TABS=["dashboard","properties","transactions","reports","settings"];
+  function showTab(name){document.querySelectorAll("#tabs button").forEach(function(b){b.setAttribute("aria-selected",b.dataset.tab===name);});TABS.forEach(function(t){document.getElementById("panel-"+t).hidden=(t!==name);});if(name==="dashboard")drawChart();try{location.hash=name;}catch(e){}}
+  document.getElementById("tabs").addEventListener("click",function(e){var b=e.target.closest("button[data-tab]");if(b)showTab(b.dataset.tab);});
+  function applyTheme(t){if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);else document.documentElement.removeAttribute("data-theme");}
+  (function(){var t;try{t=localStorage.getItem(THEME);}catch(e){}if(t)applyTheme(t);})();
+  document.getElementById("themeBtn").addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme");var isDark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;var next=isDark?"light":"dark";applyTheme(next);try{localStorage.setItem(THEME,next);}catch(e){}drawChart();});
+
+  /* ---------- transaction modal ---------- */
+  function fillCats(){var sel=document.getElementById("fCategory");var cur=sel.value;sel.innerHTML="";(pendingType==="income"?state.cats.income:state.cats.expense).forEach(function(c){var o=document.createElement("option");o.value=c;o.textContent=c;sel.appendChild(o);});if(cur)sel.value=cur;}
+  function setType(t){pendingType=t;document.querySelectorAll("#txTypeSeg button").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.type===t);});fillCats();}
+  document.getElementById("txTypeSeg").addEventListener("click",function(e){var b=e.target.closest("button");if(b)setType(b.dataset.type);});
+  function openTx(id,prefill){
+    editTxId=id||null;
+    document.getElementById("txTitle").textContent=id?"Edit entry":(prefill?"Record payment":"Add income / expense");
+    fillPropertySelects();
+    var x=prefill||(id?state.tx.find(function(t){return t.id===id;}):null);
+    if(x){setType(x.type);document.getElementById("fDate").value=prefill?todayISO():x.date;document.getElementById("fAmount").value=x.amount;fillCats();document.getElementById("fCategory").value=x.category;document.getElementById("fDesc").value=x.desc||"";document.getElementById("fProperty").value=x.propertyId||(state.properties[0]&&state.properties[0].id)||"";}
+    else{setType("income");document.getElementById("fDate").value=todayISO();document.getElementById("fAmount").value="";document.getElementById("fDesc").value="";document.getElementById("fProperty").value=(state.properties[0]&&state.properties[0].id)||"";}
+    document.getElementById("txScrim").hidden=false;document.getElementById("fAmount").focus();
+  }
+  document.getElementById("txSave").addEventListener("click",function(){
+    var amt=parseFloat(document.getElementById("fAmount").value);if(!(amt>0)){document.getElementById("fAmount").focus();return;}
+    var rec={id:editTxId||uid(),date:document.getElementById("fDate").value||todayISO(),type:pendingType,amount:amt,category:document.getElementById("fCategory").value,desc:document.getElementById("fDesc").value.trim(),propertyId:document.getElementById("fProperty").value};
+    if(editTxId){var i=state.tx.findIndex(function(t){return t.id===editTxId;});state.tx[i]=rec;}else state.tx.push(rec);
+    commit();document.getElementById("txScrim").hidden=true;
+  });
+  document.getElementById("txTable").addEventListener("click",function(e){
+    var ed=e.target.closest("[data-edit]"),de=e.target.closest("[data-del]"),du=e.target.closest("[data-dup]");
+    if(ed)openTx(ed.dataset.edit);
+    if(du){var x=state.tx.find(function(t){return t.id===du.dataset.dup;});if(x)openTx(null,x);}
+    if(de){state.tx=state.tx.filter(function(t){return t.id!==de.dataset.del;});commit();}
+  });
+  document.getElementById("rentRollTable").addEventListener("click",function(e){
+    var pay=e.target.closest("[data-pay]");
+    if(pay){var p=state.properties.find(function(x){return x.id===pay.dataset.pay;});if(p){var mm=+pay.dataset.month;var y=state.settings.year;var dt=y+"-"+String(mm+1).padStart(2,"0")+"-"+String(Math.min(new Date().getDate(),28)).padStart(2,"0");openTx(null,{type:"income",amount:+p.rent||0,category:"Rent income",desc:MONTHS[mm]+" rent",propertyId:p.id,date:dt});}}
+  });
+  ["txSearch","txType","txPeriod","txProp"].forEach(function(id){document.getElementById(id).addEventListener("input",renderTransactions);});
+  document.getElementById("txProp").addEventListener("change",renderTransactions);
+  document.getElementById("txType").addEventListener("change",renderTransactions);
+  document.getElementById("rrPeriod").addEventListener("change",renderProperties);
+  ["rPeriod","rProp"].forEach(function(id){document.getElementById(id).addEventListener("change",renderReports);});
+  document.getElementById("addTxBtn").addEventListener("click",function(){openTx();});
+  document.getElementById("addFromDash").addEventListener("click",function(){openTx();});
+
+  /* ---------- property modal ---------- */
+  function openProp(id){
+    editPropId=id||null;
+    document.getElementById("propTitle").textContent=id?"Edit property":"Add property";
+    var p=id?state.properties.find(function(x){return x.id===id;}):null;
+    document.getElementById("pName").value=p?p.name:"";
+    document.getElementById("pRent").value=p?(p.rent||""):"";
+    document.getElementById("pTenant").value=p?(p.tenant||""):"";
+    document.getElementById("propScrim").hidden=false;document.getElementById("pName").focus();
+  }
+  document.getElementById("propSave").addEventListener("click",function(){
+    var name=document.getElementById("pName").value.trim();if(!name){document.getElementById("pName").focus();return;}
+    var rec={id:editPropId||uid(),name:name,rent:parseFloat(document.getElementById("pRent").value)||0,tenant:document.getElementById("pTenant").value.trim()};
+    if(editPropId){var i=state.properties.findIndex(function(x){return x.id===editPropId;});state.properties[i]=rec;}else state.properties.push(rec);
+    commit();document.getElementById("propScrim").hidden=true;
+  });
+  ["addPropBtn","addPropBtn2","addPropBtn3"].forEach(function(id){document.getElementById(id).addEventListener("click",function(){openProp();});});
+  function propTableClick(e){
+    var ed=e.target.closest("[data-editprop]"),de=e.target.closest("[data-delprop]");
+    if(ed)openProp(ed.dataset.editprop);
+    if(de){var id=de.dataset.delprop;var hasTx=state.tx.some(function(t){return t.propertyId===id;});
+      if(hasTx&&!confirm("This property has income/expense entries. Delete the property anyway? (Its entries stay, marked unassigned.)"))return;
+      state.properties=state.properties.filter(function(x){return x.id!==id;});commit();}
+  }
+  document.getElementById("propTable").addEventListener("click",propTableClick);
+  document.getElementById("propEditTable").addEventListener("click",propTableClick);
+
+  document.querySelectorAll("[data-close]").forEach(function(b){b.addEventListener("click",function(){document.getElementById("txScrim").hidden=true;document.getElementById("propScrim").hidden=true;});});
+  document.querySelectorAll(".scrim").forEach(function(s){s.addEventListener("click",function(e){if(e.target===s)s.hidden=true;});});
+
+  /* ---------- settings bindings ---------- */
+  function bindSetting(id,key,parse){document.getElementById(id).addEventListener("change",function(){var v=this.value;if(parse)v=parse(v);state.settings[key]=v;commit();});}
+  bindSetting("sName","name");
+  bindSetting("sYear","year",function(v){return parseInt(v,10)||new Date().getFullYear();});
+  bindSetting("sRate","rate",function(v){return Math.max(0,Math.min(60,parseFloat(v)||0));});
+  bindSetting("sCur","currency",function(v){return (v||"$").slice(0,3);});
+  document.getElementById("sampleBtn").addEventListener("click",function(){state=sampleData();commit();showTab("dashboard");});
+  document.getElementById("clearSampleBtn").addEventListener("click",clearAll);
+  document.getElementById("clearBtn").addEventListener("click",clearAll);
+  var clearArmed=false,clearTimer=null;
+  function clearAll(){var btn=document.getElementById("clearBtn");if(!clearArmed){clearArmed=true;btn.textContent="Tap again to erase everything";clearTimer=setTimeout(function(){clearArmed=false;btn.textContent="Clear all data";},3500);return;}clearTimeout(clearTimer);clearArmed=false;btn.textContent="Clear all data";state=blankData();commit();showTab("dashboard");}
+
+  function downloadFile(name,text,mime){try{var blob=new Blob([text],{type:mime||"text/plain"}),url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},100);return true;}catch(e){return false;}}
+  function doBackup(){var ok=downloadFile("rentledger-backup-"+todayISO()+".json",JSON.stringify(state,null,2),"application/json");if(ok){state.lastBackup=Date.now();state.dirty=0;save();renderAll();}}
+  document.getElementById("backupBtn").addEventListener("click",doBackup);
+  document.getElementById("backupNowBtn").addEventListener("click",function(){doBackup();showTab("settings");});
+  document.getElementById("restoreBtn").addEventListener("click",function(){document.getElementById("fileInput").click();});
+  document.getElementById("fileInput").addEventListener("change",function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(d&&d.settings&&(d.tx||d.properties)){d.sample=false;state=migrate(d);commit();showTab("dashboard");}}catch(err){}};r.readAsText(f);e.target.value="";});
+  document.getElementById("csvBtn").addEventListener("click",function(){
+    var y=state.settings.year;
+    var rows=[["Date","Type","Property","Category","Description","Amount"]];
+    state.tx.slice().filter(function(x){return yearOf(x.date)===y;}).sort(function(a,b){return a.date<b.date?-1:1;}).forEach(function(x){rows.push([x.date,x.type,propName(x.propertyId),x.category,(x.desc||""),(x.type==="income"?"":"-")+(+x.amount).toFixed(2)]);});
+    var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(",");}).join("\r\n");
+    downloadFile("rentledger-"+y+".csv",csv,"text/csv");
+  });
+
+  /* ---------- commit / boot ---------- */
+  function commit(){state.dirty=(state.dirty||0)+1;save();periodOptions(document.getElementById("txPeriod"));periodOptions(document.getElementById("rPeriod"));renderAll();fillPropertySelects();}
+  function boot(){
+    state=load();if(!state){state=sampleData();save();}else{state=migrate(state);}
+    applyAccent();
+    periodOptions(document.getElementById("txPeriod"));periodOptions(document.getElementById("rPeriod"));monthOptions(document.getElementById("rrPeriod"));
+    fillPropertySelects();
+    renderAll();
+    var h=(location.hash||"").replace("#","");
+    if(TABS.indexOf(h)>=0)showTab(h);else showTab("dashboard");
+    window.addEventListener("resize",function(){if(!document.getElementById("panel-dashboard").hidden)drawChart();});
+  }
+  boot();
+})();
+</script>
+<script>
+/* ===== DEMO ONLY: non-persistent + limited exports + purchase pill. Delete this whole block for the paid file. ===== */
+(function(){
+  try{ localStorage.removeItem("rentledger_v1"); localStorage.removeItem("rentledger_theme"); }catch(e){}
+  try{ Storage.prototype.setItem = function(){}; }catch(e){}
+  function toast(msg){
+    var t=document.createElement("div");t.textContent=msg;
+    t.style.cssText="position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:1000;background:#16202a;color:#fff;border:1px solid rgba(255,255,255,.15);padding:10px 16px;border-radius:10px;font:600 13px system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:90%;text-align:center";
+    document.body.appendChild(t);
+    setTimeout(function(){ t.style.transition="opacity .4s"; t.style.opacity="0"; setTimeout(function(){t.remove();},400); },2600);
+  }
+  ["backupBtn","restoreBtn","csvBtn","backupNowBtn"].forEach(function(id){
+    var el=document.getElementById(id); if(!el) return;
+    var c=el.cloneNode(true); el.parentNode.replaceChild(c,el);
+    c.addEventListener("click",function(e){ e.preventDefault(); toast("💚 Backup & export are in the full version — get it on Etsy."); });
+  });
+  var st=document.createElement("style"); st.textContent="#backupBanner{display:none!important}"; document.head.appendChild(st);
+  var bar=document.createElement("div");
+  bar.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:999;display:flex;align-items:center;gap:10px;background:#0f8a8a;color:#fff;padding:9px 12px 9px 15px;border-radius:99px;box-shadow:0 8px 24px rgba(0,0,0,.28);font:600 13px system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;max-width:calc(100% - 24px)";
+  var span=document.createElement("span");
+  span.textContent="✨ Free demo — entries aren’t saved";
+  span.style.cssText="white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+  var a=document.createElement("a");
+  a.href="https://www.etsy.com/shop/GigantoStudio";   /* TODO: replace with live RentLedger listing URL after publish */
+  a.target="_blank"; a.rel="noopener"; a.textContent="Get the full app →";
+  a.style.cssText="background:#fff;color:#0f8a8a;text-decoration:none;padding:5px 11px;border-radius:99px;white-space:nowrap";
+  var x=document.createElement("button");
+  x.type="button"; x.textContent="✕"; x.setAttribute("aria-label","Dismiss");
+  x.style.cssText="background:transparent;border:0;color:#d9efef;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px";
+  x.onclick=function(){ bar.remove(); };
+  bar.appendChild(span); bar.appendChild(a); bar.appendChild(x);
+  document.body.appendChild(bar);
+})();
+</script>
